@@ -8,9 +8,9 @@ from functools import partial
 # sys.path.append(os.path.dirname(__file__))
 # import Editor
 
-class Supicker(QtWidgets.QDialog):
+class Martopicker(QtWidgets.QDialog):
 	def __init__(self, parent = None):
-		super(Supicker, self).__init__(parent)
+		super(Martopicker, self).__init__(parent)
 		
 		self.setInterface()
 		self.connectInterface()
@@ -87,8 +87,17 @@ class Editor(QtWidgets.QWidget):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			if self.edit_mode:
 				selection = cmds.ls(sl=True)
-				self.buttons_list.append(EditorButton(e.x(), e.y(), 10, selection))
-				self.updateEditMode()
+				if selection:
+					if len(selection) == 1:
+						self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
+					else:
+						self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
+						i = 1
+						for sel in selection:
+							self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
+							i += 1
+
+					self.updateEditMode()
 			else:
 				self.updateSelectMode(e)
 				self.repaint()
@@ -137,27 +146,31 @@ class Editor(QtWidgets.QWidget):
 		for button in self.buttons_list:
 			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
 			button.deselect()
-			if dist < button.getRadius():
-				button.select()
-				for sel in button.getSelection():
-					select.append(sel)
+			if e.x() > button.getPosX() - button.getRadiusX()/2:
+				if e.x() < button.getPosX() + button.getRadiusX()/2:
+					if e.y() > button.getPosY() - button.getRadiusY()/2:
+						if e.y() < button.getPosY() + button.getRadiusY()/2:
+							button.select()
+							for sel in button.getSelection():
+								select.append(sel)
 
 		cmds.select(select)
 
 
 	def boxSelect(self):
 		select = []
-		for button in self.buttons_list:
-			box_x_min = min((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
-			box_x_max = max((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
-			box_y_min = min((self.box_selection[1], self.box_selection[1] + self.box_selection[3]))
-			box_y_max = max((self.box_selection[1], self.box_selection[1] + self.box_selection[3]))
 
+		box_x_min = min((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
+		box_x_max = max((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
+		box_y_min = min((self.box_selection[1], self.box_selection[1] + self.box_selection[3]))
+		box_y_max = max((self.box_selection[1], self.box_selection[1] + self.box_selection[3]))
+		
+		for button in self.buttons_list:
 			button.deselect()
-			if button.getPosX() > box_x_min:
-				if button.getPosX() < box_x_max:
-					if button.getPosY() > box_y_min:
-						if button.getPosY() < box_y_max:
+			if button.getPosX() + button.getRadiusX()/2 > box_x_min:
+				if button.getPosX() - button.getRadiusX()/2 < box_x_max:
+					if button.getPosY() + button.getRadiusY()/2 > box_y_min:
+						if button.getPosY() - button.getRadiusY()/2 < box_y_max:
 							button.select()
 							for sel in button.getSelection():
 								select.append(sel)
@@ -187,11 +200,13 @@ class Editor(QtWidgets.QWidget):
 
 
 class EditorButton():
-	def __init__(self, pos_x, pos_y, radius, selection):
+	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, text):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
-		self.radius = radius
+		self.radius_x = radius_x
+		self.radius_y = radius_y
 		self.selection = selection
+		self.shape = shape
 		self.selected = False
 		self.color = QtGui.QColor(120, 120, 255)
 		self.selected_color = QtGui.QColor(220, 220, 255)
@@ -205,12 +220,20 @@ class EditorButton():
 		return self.pos_y
 
 
-	def getRadius(self):
-		return self.radius
+	def getRadiusX(self):
+		return self.radius_x
+
+
+	def getRadiusY(self):
+		return self.radius_y
 
 
 	def getSelection(self):
 		return self.selection
+
+
+	def getShape(self):
+		return self.shape
 
 
 	def select(self):
@@ -227,7 +250,11 @@ class EditorButton():
 			qp.setBrush(self.selected_color)
 		else:
 			qp.setBrush(self.color)
-		qp.drawEllipse(self.getPosX() - self.getRadius()/2, self.getPosY() - self.getRadius()/2, self.getRadius(), self.getRadius())
+
+		if self.shape == "ellipse":
+			qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
+		elif self.shape == "rect":
+			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y);
 
 
 def getMayaWindow():
@@ -237,7 +264,7 @@ def getMayaWindow():
 
 def main():
 	global ui
-	ui = Supicker(getMayaWindow())
+	ui = Martopicker(getMayaWindow())
 	ui.show()
 
 
