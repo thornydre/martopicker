@@ -67,6 +67,7 @@ class Editor(QtWidgets.QWidget):
 		self.buttons_list = []
 		self.edit_mode = False
 		self.box_selection = [-1, -1, 0, 0]
+		self.edited_button = None
 
 		super(Editor, self).__init__()
 
@@ -79,25 +80,36 @@ class Editor(QtWidgets.QWidget):
 
 
 	def mousePressEvent(self, e):
-		self.box_selection[0] = e.x()
-		self.box_selection[1] = e.y()
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			if self.edit_mode:
+				for button in self.buttons_list:
+					dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
+					button.deselect()
+					if button.isOnButton(e.x(), e.y()):
+						self.edited_button = button
+			else:
+				self.box_selection[0] = e.x()
+				self.box_selection[1] = e.y()
 
 
 	def mouseReleaseEvent(self, e):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			if self.edit_mode:
-				selection = cmds.ls(sl=True)
-				if selection:
-					if len(selection) == 1:
-						self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
-					else:
-						self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
-						i = 1
-						for sel in selection:
-							self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
-							i += 1
+				if self.edited_button:
+					self.edited_button = None
+				else:
+					selection = cmds.ls(sl=True)
+					if selection:
+						if len(selection) == 1:
+							self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
+						else:
+							self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
+							i = 1
+							for sel in selection:
+								self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
+								i += 1
 
-					self.updateEditMode()
+						self.updateEditMode()
 			else:
 				self.updateSelectMode(e)
 				self.repaint()
@@ -111,7 +123,12 @@ class Editor(QtWidgets.QWidget):
 
 
 	def mouseMoveEvent(self, e):
-		if not self.edit_mode:
+		if self.edit_mode:
+			if self.edited_button:
+				self.edited_button.setPosX(e.x())
+				self.edited_button.setPosY(e.y())
+				self.repaint()
+		else:
 			if self.box_selection[:1] != [-1, -1]:
 				self.box_selection[2] = e.x() - self.box_selection[0]
 				self.box_selection[3] = e.y() - self.box_selection[1]
@@ -146,13 +163,10 @@ class Editor(QtWidgets.QWidget):
 		for button in self.buttons_list:
 			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
 			button.deselect()
-			if e.x() > button.getPosX() - button.getRadiusX()/2:
-				if e.x() < button.getPosX() + button.getRadiusX()/2:
-					if e.y() > button.getPosY() - button.getRadiusY()/2:
-						if e.y() < button.getPosY() + button.getRadiusY()/2:
-							button.select()
-							for sel in button.getSelection():
-								select.append(sel)
+			if button.isOnButton(e.x(), e.y()):
+				button.select()
+				for sel in button.getSelection():
+					select.append(sel)
 
 		cmds.select(select)
 
@@ -220,6 +234,14 @@ class EditorButton():
 		return self.pos_y
 
 
+	def setPosX(self, pos_x):
+		self.pos_x = pos_x
+
+
+	def setPosY(self, pos_y):
+		self.pos_y = pos_y
+
+
 	def getRadiusX(self):
 		return self.radius_x
 
@@ -254,8 +276,15 @@ class EditorButton():
 		if self.shape == "ellipse":
 			qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
 		elif self.shape == "rect":
-			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y);
+			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
 
+	def isOnButton(self, x, y):
+		if x > self.pos_x - self.radius_x/2:
+			if x < self.pos_x + self.radius_x/2:
+				if y > self.pos_y - self.radius_y/2:
+					if y < self.pos_y + self.radius_y/2:
+						return True
+		return False
 
 def getMayaWindow():
 	ptr = mui.MQtUtil.mainWindow()
