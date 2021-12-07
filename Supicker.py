@@ -20,19 +20,42 @@ class Supicker(QtWidgets.QDialog):
 	def setInterface(self):
 		main_layout = QtWidgets.QVBoxLayout()
 		
+		buttons_layout = QtWidgets.QHBoxLayout()
+
 		self.mode_button = QtWidgets.QPushButton("Edit")
+		self.mode_button.setMaximumWidth(100)
 		self.mode_button.setCheckable(True)
 
-		self.editor = Editor(200, 200)
+		self.edit_buttons_widget = QtWidgets.QWidget()
+		edit_buttons_layout = QtWidgets.QHBoxLayout()
 
-		main_layout.addWidget(self.mode_button)
+		self.add_selector_button = QtWidgets.QPushButton("Add Selector")
+		self.add_mult_selector_button = QtWidgets.QPushButton("Add Multiple Selector")
+
+		edit_buttons_layout.addWidget(self.add_selector_button)
+		edit_buttons_layout.addWidget(self.add_mult_selector_button)
+		self.edit_buttons_widget.setLayout(edit_buttons_layout)
+		self.edit_buttons_widget.setVisible(False)
+
+		self.editor = Editor(400, 400)
+
+		buttons_layout.addWidget(self.mode_button)
+		buttons_layout.addWidget(self.edit_buttons_widget)
+		buttons_layout.addStretch(1)
+
+		main_layout.addLayout(buttons_layout)
 		main_layout.addWidget(self.editor)
 
 		self.setLayout(main_layout)
 
 
 	def connectInterface(self):
-		self.mode_button.clicked.connect(self.editor.toggleEditMode)
+		self.mode_button.clicked.connect(self.toggleEditMode)
+
+
+	def toggleEditMode(self):
+		self.editor.toggleEditMode()
+		self.edit_buttons_widget.setVisible(self.editor.getEditMode())
 
 
 	def closeEvent(self, e):
@@ -47,6 +70,10 @@ class Editor(QtWidgets.QWidget):
 
 		super(Editor, self).__init__()
 
+		self.setAutoFillBackground(True)
+		p = self.palette()
+		p.setColor(self.backgroundRole(), QtGui.QColor(50, 50, 50))
+		self.setPalette(p)
 		self.setMinimumSize(width, height)
 		self.resize(width, height) 
 
@@ -54,17 +81,17 @@ class Editor(QtWidgets.QWidget):
 	def mousePressEvent(self, e):
 		self.box_selection[0] = e.x()
 		self.box_selection[1] = e.y()
-		if e.button() == QtCore.Qt.MouseButton.LeftButton:
-			if not self.edit_mode:
-				self.updateSelectMode(e)
-				self.repaint()
 
 
 	def mouseReleaseEvent(self, e):
-		if self.edit_mode:
-			selection = cmds.ls(sl=True)
-			self.buttons_list.append(EditorButton(e.x(), e.y(), 10, selection))
-			self.updateEditMode()
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			if self.edit_mode:
+				selection = cmds.ls(sl=True)
+				self.buttons_list.append(EditorButton(e.x(), e.y(), 10, selection))
+				self.updateEditMode()
+			else:
+				self.updateSelectMode(e)
+				self.repaint()
 
 		if self.box_selection[:1] != [-1, -1]:
 			if abs(self.box_selection[2]) > 2 and abs(self.box_selection[3]) > 2:
@@ -102,9 +129,6 @@ class Editor(QtWidgets.QWidget):
 
 
 	def updateEditMode(self):
-		size = self.size()
-		w = size.width()
-
 		self.repaint()
 
 
@@ -158,6 +182,10 @@ class Editor(QtWidgets.QWidget):
 		self.repaint()
 
 
+	def getEditMode(self):
+		return self.edit_mode
+
+
 class EditorButton():
 	def __init__(self, pos_x, pos_y, radius, selection):
 		self.pos_x = pos_x
@@ -165,6 +193,8 @@ class EditorButton():
 		self.radius = radius
 		self.selection = selection
 		self.selected = False
+		self.color = QtGui.QColor(120, 120, 255)
+		self.selected_color = QtGui.QColor(220, 220, 255)
 
 
 	def getPosX(self):
@@ -183,29 +213,20 @@ class EditorButton():
 		return self.selection
 
 
-	def click(self):
-		self.selected = not self.selected
-		cmds.select(cl=True)
-		for sel in self.selection:
-			cmds.select(sel, add=True)
-
-
 	def select(self):
 		self.selected = True
 
 
 	def deselect(self):
 		self.selected = False
-		# for sel in self.selection:
-		# 	cmds.select(sel, deselect=True)
 
 
 	def draw(self, qp):
-		qp.setPen(QtGui.QColor(184, 184, 255))
+		qp.setPen(QtGui.QColor(10, 10, 10))
 		if self.selected:
-			qp.setBrush(QtGui.QColor(220, 220, 255))
+			qp.setBrush(self.selected_color)
 		else:
-			qp.setBrush(QtGui.QColor(184, 184, 255))
+			qp.setBrush(self.color)
 		qp.drawEllipse(self.getPosX() - self.getRadius()/2, self.getPosY() - self.getRadius()/2, self.getRadius(), self.getRadius())
 
 
