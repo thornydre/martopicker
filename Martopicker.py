@@ -11,7 +11,9 @@ from functools import partial
 class Martopicker(QtWidgets.QDialog):
 	def __init__(self, parent = None):
 		super(Martopicker, self).__init__(parent)
-		
+
+		# self.installEventFilter(self)
+
 		self.setInterface()
 		self.connectInterface()
 		self.maya_job = cmds.scriptJob(event=["SelectionChanged", self.editor.selectionFromViewport])
@@ -62,6 +64,10 @@ class Martopicker(QtWidgets.QDialog):
 		cmds.scriptJob(kill=self.maya_job)
 
 
+	def keyPressEvent(self, e):
+		self.editor.keyPressEvent(e)
+
+
 class Editor(QtWidgets.QWidget):
 	def __init__(self, width, height):
 		self.buttons_list = []
@@ -70,6 +76,8 @@ class Editor(QtWidgets.QWidget):
 		self.edited_button = None
 
 		super(Editor, self).__init__()
+
+		self.installEventFilter(self)
 
 		self.setAutoFillBackground(True)
 		p = self.palette()
@@ -81,13 +89,16 @@ class Editor(QtWidgets.QWidget):
 
 	def mousePressEvent(self, e):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			start_box = True
 			if self.edit_mode:
 				for button in self.buttons_list:
-					dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
 					button.deselect()
 					if button.isOnButton(e.x(), e.y()):
 						self.edited_button = button
-			else:
+						button.select()
+						start_box = False
+
+			if start_box:
 				self.box_selection[0] = e.x()
 				self.box_selection[1] = e.y()
 
@@ -98,41 +109,54 @@ class Editor(QtWidgets.QWidget):
 				if self.edited_button:
 					self.edited_button = None
 				else:
-					selection = cmds.ls(sl=True)
-					if selection:
-						if len(selection) == 1:
-							self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
-						else:
-							self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
-							i = 1
-							for sel in selection:
-								self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
-								i += 1
+					if abs(self.box_selection[2]) < 2 and abs(self.box_selection[3]) < 2:
+						selection = cmds.ls(sl=True)
+						if selection:
+							if len(selection) == 1:
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
+							else:
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
+								i = 1
+								for sel in selection:
+									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
+									i += 1
 
-						self.updateEditMode()
+							self.updateEditMode()
 			else:
 				self.updateSelectMode(e)
 				self.repaint()
 
 		if self.box_selection[:1] != [-1, -1]:
-			if abs(self.box_selection[2]) > 2 and abs(self.box_selection[3]) > 2:
-				self.boxSelect()
+			if not self.edited_button:
+				if abs(self.box_selection[2]) > 2 and abs(self.box_selection[3]) > 2:
+					self.boxSelect()
 
-			self.box_selection = [-1, -1, 0, 0]
-			self.repaint()
+				self.box_selection = [-1, -1, 0, 0]
+				self.repaint()
 
 
 	def mouseMoveEvent(self, e):
+		repaint = False
+
 		if self.edit_mode:
 			if self.edited_button:
 				self.edited_button.setPosX(e.x())
 				self.edited_button.setPosY(e.y())
-				self.repaint()
-		else:
-			if self.box_selection[:1] != [-1, -1]:
+				repaint = True
+
+		if self.box_selection[:1] != [-1, -1]:
+			if not self.edited_button:
 				self.box_selection[2] = e.x() - self.box_selection[0]
 				self.box_selection[3] = e.y() - self.box_selection[1]
-				self.repaint()
+				repaint = True
+
+		if repaint:
+			self.repaint()
+
+
+	def keyPressEvent(self, e):
+		if e.key() == QtCore.Qt.Key_Delete:
+			print("DELETE")
 
 
 	def toggleEditMode(self):
