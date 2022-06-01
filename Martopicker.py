@@ -5,6 +5,7 @@ import sys
 import os
 import math
 import pickle
+import maya.cmds as cmds
 from functools import partial
 # sys.path.append(os.path.dirname(__file__))
 # import Editor
@@ -23,7 +24,12 @@ class Martopicker(QtWidgets.QDialog):
 	def setInterface(self):
 		main_layout = QtWidgets.QVBoxLayout()
 		
+		buttons_widget = QtWidgets.QWidget()
+		buttons_widget.setMinimumHeight(30)
+		buttons_widget.setMaximumHeight(30)
+		buttons_widget.setContentsMargins(0, 0, 0, 0)
 		buttons_layout = QtWidgets.QHBoxLayout()
+		buttons_layout.setContentsMargins(0, 0, 0, 0)
 
 		self.mode_button = QtWidgets.QPushButton("Edit")
 		self.mode_button.setMaximumWidth(100)
@@ -31,34 +37,49 @@ class Martopicker(QtWidgets.QDialog):
 
 		self.edit_buttons_widget = QtWidgets.QWidget()
 		edit_buttons_layout = QtWidgets.QHBoxLayout()
+		edit_buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-		self.add_selector_button = QtWidgets.QPushButton("Add Selector")
-		self.add_mult_selector_button = QtWidgets.QPushButton("Add Multiple Selector")
+		self.color_button = QtWidgets.QPushButton("Color")
+		self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+		self.name_textfield = QtWidgets.QLineEdit()
+		self.add_scripted_button = QtWidgets.QPushButton("Add Scripted Button")
 
-		edit_buttons_layout.addWidget(self.add_selector_button)
-		edit_buttons_layout.addWidget(self.add_mult_selector_button)
+		edit_buttons_layout.addWidget(self.color_button)
+		edit_buttons_layout.addWidget(self.size_slider)
+		edit_buttons_layout.addWidget(self.name_textfield)
+		edit_buttons_layout.addWidget(self.add_scripted_button)
 		self.edit_buttons_widget.setLayout(edit_buttons_layout)
 		self.edit_buttons_widget.setVisible(False)
 
-		self.editor = Editor(400, 400)
+		self.editor = Editor(600, 400)
 
 		buttons_layout.addWidget(self.mode_button)
 		buttons_layout.addWidget(self.edit_buttons_widget)
 		buttons_layout.addStretch(1)
 
-		main_layout.addLayout(buttons_layout)
+		buttons_widget.setLayout(buttons_layout)
+
+		main_layout.addWidget(buttons_widget)
 		main_layout.addWidget(self.editor)
 
 		self.setLayout(main_layout)
 
 
 	def connectInterface(self):
-		self.mode_button.clicked.connect(self.toggleEditMode)
+		self.mode_button.clicked.connect(self.toggleEditModeCommand)
+		self.color_button.clicked.connect(self.chooseColorCommand)
 
 
-	def toggleEditMode(self):
+	def toggleEditModeCommand(self):
 		self.editor.toggleEditMode()
 		self.edit_buttons_widget.setVisible(self.editor.getEditMode())
+
+
+	def chooseColorCommand(self):
+		# color = QtWidgets.QColorDialog.getColor(options=QtWidgets.QColorDialog.DontUseNativeDialog)
+		color = QtWidgets.QColorDialog.getColor()
+
+		print(color)
 
 
 	def closeEvent(self, e):
@@ -91,6 +112,8 @@ class Editor(QtWidgets.QWidget):
 
 	def mousePressEvent(self, e):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			self.setFocus()
+
 			start_box = True
 			if self.edit_mode:
 				self.edited_list = []
@@ -142,17 +165,14 @@ class Editor(QtWidgets.QWidget):
 									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
 									i += 1
 
-							self.updateEditMode()
-			else:
-				self.updateSelectMode(e)
+							self.repaint()
+
+			self.updateSelectMode(e)
 
 		if self.box_selection[:1] != [-1, -1]:
 			if not self.edited_list:
-				if abs(self.box_selection[2]) > 2 and abs(self.box_selection[3]) > 2:
+				if (self.box_selection[2] ** 2 + self.box_selection[3] ** 2) ** 0.5 > 2:
 					self.boxSelect()
-
-				self.box_selection = [-1, -1, 0, 0]
-				self.repaint()
 
 
 	def mouseMoveEvent(self, e):
@@ -190,38 +210,40 @@ class Editor(QtWidgets.QWidget):
 
 		elif e.key() == QtCore.Qt.Key_S:
 			if e.modifiers() == QtCore.Qt.ControlModifier:
-				save_path = QtWidgets.QFileDialog.getSaveFileUrl()
-				print(save_path[0])
-				with open(save_path[0].toString(), "w") as file:
-					pickle.dump(self.buttons_list, file)
+				save_path = QtWidgets.QFileDialog.getSaveFileName(caption="Save picker", filter="*.pik")[0]
+
+				self.savePicker(save_path)
+
+		elif e.key() == QtCore.Qt.Key_O:
+			if e.modifiers() == QtCore.Qt.ControlModifier:
+				file_path = QtWidgets.QFileDialog.getOpenFileName(caption="Load picker", filter="*.pik")[0]
+
+				self.loadPicker(file_path)
 
 
 	def toggleEditMode(self):
 		self.edit_mode = not self.edit_mode
+		self.repaint()
 
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
+		qp.setRenderHint(QPainter.Antialiasing, True)
 		qp.begin(self)
 
 		for button in self.buttons_list:
 			button.draw(qp, self.edit_mode)
 
 		if self.box_selection[:1] != [-1, -1]:
-			qp.setPen(QtGui.QColor(184, 184, 255, 100))
-			qp.setBrush(QtGui.QColor(184, 184, 255, 100))
+			qp.setPen(QtGui.QColor(184, 184, 255, 50))
+			qp.setBrush(QtGui.QColor(184, 184, 255, 50))
 			qp.drawRect(self.box_selection[0], self.box_selection[1], self.box_selection[2], self.box_selection[3])
 
 		qp.end()
 
 
-	def updateEditMode(self):
-		self.repaint()
-
-
 	def updateSelectMode(self, e):
 		select = []
-		# self.selected_list = []
 
 		for button in self.buttons_list:
 			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
@@ -231,14 +253,14 @@ class Editor(QtWidgets.QWidget):
 				for sel in button.getSelection():
 					select.append(sel)
 
-		cmds.select(select)
+		if not self.edit_mode:
+			cmds.select(select)
 
 		self.repaint()
 
 
 	def boxSelect(self):
 		select = []
-		# self.selected_list = []
 
 		box_x_min = min((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
 		box_x_max = max((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
@@ -255,7 +277,12 @@ class Editor(QtWidgets.QWidget):
 							for sel in button.getSelection():
 								select.append(sel)
 
-		cmds.select(select)
+		if not self.edit_mode:
+			cmds.select(select)
+
+		self.box_selection = [-1, -1, 0, 0]
+
+		self.repaint()
 
 
 	def selectionFromViewport(self):
@@ -290,6 +317,21 @@ class Editor(QtWidgets.QWidget):
 		button.deselect()
 		if button in self.selected_list:
 			self.selected_list.remove(button)
+
+
+	def savePicker(self, path):
+		if path:
+			if os.path.splitext(path)[1] == ".pik":
+				with open(path, "wb") as file:
+					pickle.dump(self.buttons_list, file)
+
+
+	def loadPicker(self, path):
+		if path:
+			if os.path.splitext(path)[1] == ".pik":
+				with open(path, "rb") as file:
+					self.buttons_list = pickle.load(file)
+					self.repaint()
 
 
 class EditorButton():
