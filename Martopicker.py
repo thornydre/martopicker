@@ -71,9 +71,10 @@ class Martopicker(QtWidgets.QDialog):
 class Editor(QtWidgets.QWidget):
 	def __init__(self, width, height):
 		self.buttons_list = []
+		self.selected_list = []
 		self.edit_mode = False
 		self.box_selection = [-1, -1, 0, 0]
-		self.edited_button = None
+		self.edited_list = []
 
 		super(Editor, self).__init__()
 
@@ -91,11 +92,14 @@ class Editor(QtWidgets.QWidget):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			start_box = True
 			if self.edit_mode:
+				self.edited_list = []
 				for button in self.buttons_list:
-					button.deselect()
+					button.editDeselect()
 					if button.isOnButton(e.x(), e.y()):
-						self.edited_button = button
-						button.select()
+						if not button.getSelected():
+							self.edited_list = self.selected_list
+						self.edited_list.append(button)
+						button.editSelect()
 						start_box = False
 
 			if start_box:
@@ -106,8 +110,8 @@ class Editor(QtWidgets.QWidget):
 	def mouseReleaseEvent(self, e):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			if self.edit_mode:
-				if self.edited_button:
-					self.edited_button = None
+				if self.edited_list:
+					self.edited_list = []
 				else:
 					if abs(self.box_selection[2]) < 2 and abs(self.box_selection[3]) < 2:
 						selection = cmds.ls(sl=True)
@@ -124,10 +128,9 @@ class Editor(QtWidgets.QWidget):
 							self.updateEditMode()
 			else:
 				self.updateSelectMode(e)
-				self.repaint()
 
 		if self.box_selection[:1] != [-1, -1]:
-			if not self.edited_button:
+			if not self.edited_list:
 				if abs(self.box_selection[2]) > 2 and abs(self.box_selection[3]) > 2:
 					self.boxSelect()
 
@@ -139,13 +142,13 @@ class Editor(QtWidgets.QWidget):
 		repaint = False
 
 		if self.edit_mode:
-			if self.edited_button:
-				self.edited_button.setPosX(e.x())
-				self.edited_button.setPosY(e.y())
+			for button in self.edited_list:
+				button.setPosX(e.x())
+				button.setPosY(e.y())
 				repaint = True
 
 		if self.box_selection[:1] != [-1, -1]:
-			if not self.edited_button:
+			if not self.edited_list:
 				self.box_selection[2] = e.x() - self.box_selection[0]
 				self.box_selection[3] = e.y() - self.box_selection[1]
 				repaint = True
@@ -156,7 +159,17 @@ class Editor(QtWidgets.QWidget):
 
 	def keyPressEvent(self, e):
 		if e.key() == QtCore.Qt.Key_Delete:
-			print("DELETE")
+			if self.edit_mode:
+				for button in self.selected_list:
+					self.buttons_list.remove(button)
+				self.selected_list = []
+			else:
+				cmds.delete(cmds.ls(sl=True))
+				for button in self.selected_list:
+					self.buttons_list.remove(button)
+				self.selected_list = []
+
+			self.repaint()
 
 
 	def toggleEditMode(self):
@@ -184,19 +197,25 @@ class Editor(QtWidgets.QWidget):
 
 	def updateSelectMode(self, e):
 		select = []
+		self.selected_list = []
+
 		for button in self.buttons_list:
 			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
 			button.deselect()
 			if button.isOnButton(e.x(), e.y()):
 				button.select()
+				self.selected_list.append(button)
 				for sel in button.getSelection():
 					select.append(sel)
 
 		cmds.select(select)
 
+		self.repaint()
+
 
 	def boxSelect(self):
 		select = []
+		self.selected_list = []
 
 		box_x_min = min((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
 		box_x_max = max((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
@@ -209,7 +228,11 @@ class Editor(QtWidgets.QWidget):
 				if button.getPosX() - button.getRadiusX()/2 < box_x_max:
 					if button.getPosY() + button.getRadiusY()/2 > box_y_min:
 						if button.getPosY() - button.getRadiusY()/2 < box_y_max:
-							button.select()
+							if self.edit_mode:
+								button.editSelect()
+							else:
+								button.select()
+							self.selected_list.append(button)
 							for sel in button.getSelection():
 								select.append(sel)
 
@@ -217,20 +240,21 @@ class Editor(QtWidgets.QWidget):
 
 
 	def selectionFromViewport(self):
-		viewport_selection = cmds.ls(sl=True)
+		if not self.edit_mode:
+			viewport_selection = cmds.ls(sl=True)
 
-		for button in self.buttons_list:
-			valid_sel = True
-			for sel in button.getSelection():
-				if sel not in viewport_selection:
-					valid_sel = False
+			for button in self.buttons_list:
+				valid_sel = True
+				for sel in button.getSelection():
+					if sel not in viewport_selection:
+						valid_sel = False
 
-			if valid_sel:
-				button.select()
-			else:
-				button.deselect()
+				if valid_sel:
+					button.select()
+				else:
+					button.deselect()
 
-		self.repaint()
+			self.repaint()
 
 
 	def getEditMode(self):
@@ -246,6 +270,7 @@ class EditorButton():
 		self.selection = selection
 		self.shape = shape
 		self.selected = False
+		self.edit_selected = False
 		self.color = QtGui.QColor(120, 120, 255)
 		self.selected_color = QtGui.QColor(220, 220, 255)
 
@@ -282,6 +307,10 @@ class EditorButton():
 		return self.shape
 
 
+	def getSelected(self):
+		return self.selected or self.edit_selected
+
+
 	def select(self):
 		self.selected = True
 
@@ -290,17 +319,30 @@ class EditorButton():
 		self.selected = False
 
 
+	def editSelect(self):
+		self.edit_selected = True
+
+
+	def editDeselect(self):
+		self.edit_selected = False
+
+
 	def draw(self, qp):
-		qp.setPen(QtGui.QColor(10, 10, 10))
 		if self.selected:
 			qp.setBrush(self.selected_color)
 		else:
 			qp.setBrush(self.color)
 
+		if self.edit_selected:
+			qp.setPen(self.selected_color)
+		else:
+			qp.setPen(QtGui.QColor(10, 10, 10))
+
 		if self.shape == "ellipse":
 			qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
 		elif self.shape == "rect":
 			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
+
 
 	def isOnButton(self, x, y):
 		if x > self.pos_x - self.radius_x/2:
