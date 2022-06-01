@@ -4,6 +4,7 @@ import shiboken2
 import sys
 import os
 import math
+import pickle
 from functools import partial
 # sys.path.append(os.path.dirname(__file__))
 # import Editor
@@ -93,14 +94,30 @@ class Editor(QtWidgets.QWidget):
 			start_box = True
 			if self.edit_mode:
 				self.edited_list = []
+				reset_selection = True
+
+				if self.selected_list:
+					for button in self.buttons_list:
+						if button.isOnButton(e.x(), e.y()):
+							if button.getSelected():
+								reset_selection = False
+
 				for button in self.buttons_list:
-					button.editDeselect()
+					button.setEditOffset((button.getPosX() - e.x(), button.getPosY() - e.y()))
+
+					if reset_selection:
+						self.deselectButton(button)
+					else:
+						if button.getSelected():
+							self.edited_list.append(button)
+
 					if button.isOnButton(e.x(), e.y()):
-						if not button.getSelected():
-							self.edited_list = self.selected_list
-						self.edited_list.append(button)
-						button.editSelect()
+						self.selectButton(button)
 						start_box = False
+
+						if reset_selection:
+							if button.getSelected():
+								self.edited_list.append(button)
 
 			if start_box:
 				self.box_selection[0] = e.x()
@@ -143,8 +160,8 @@ class Editor(QtWidgets.QWidget):
 
 		if self.edit_mode:
 			for button in self.edited_list:
-				button.setPosX(e.x())
-				button.setPosY(e.y())
+				button.setPosX(e.x() + button.getEditOffset()[0])
+				button.setPosY(e.y() + button.getEditOffset()[1])
 				repaint = True
 
 		if self.box_selection[:1] != [-1, -1]:
@@ -171,6 +188,13 @@ class Editor(QtWidgets.QWidget):
 
 			self.repaint()
 
+		elif e.key() == QtCore.Qt.Key_S:
+			if e.modifiers() == QtCore.Qt.ControlModifier:
+				save_path = QtWidgets.QFileDialog.getSaveFileUrl()
+				print(save_path[0])
+				with open(save_path[0].toString(), "w") as file:
+					pickle.dump(self.buttons_list, file)
+
 
 	def toggleEditMode(self):
 		self.edit_mode = not self.edit_mode
@@ -181,7 +205,7 @@ class Editor(QtWidgets.QWidget):
 		qp.begin(self)
 
 		for button in self.buttons_list:
-			button.draw(qp)
+			button.draw(qp, self.edit_mode)
 
 		if self.box_selection[:1] != [-1, -1]:
 			qp.setPen(QtGui.QColor(184, 184, 255, 100))
@@ -197,14 +221,13 @@ class Editor(QtWidgets.QWidget):
 
 	def updateSelectMode(self, e):
 		select = []
-		self.selected_list = []
+		# self.selected_list = []
 
 		for button in self.buttons_list:
 			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
-			button.deselect()
+			self.deselectButton(button)
 			if button.isOnButton(e.x(), e.y()):
-				button.select()
-				self.selected_list.append(button)
+				self.selectButton(button)
 				for sel in button.getSelection():
 					select.append(sel)
 
@@ -215,7 +238,7 @@ class Editor(QtWidgets.QWidget):
 
 	def boxSelect(self):
 		select = []
-		self.selected_list = []
+		# self.selected_list = []
 
 		box_x_min = min((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
 		box_x_max = max((self.box_selection[0], self.box_selection[0] + self.box_selection[2]))
@@ -223,16 +246,12 @@ class Editor(QtWidgets.QWidget):
 		box_y_max = max((self.box_selection[1], self.box_selection[1] + self.box_selection[3]))
 		
 		for button in self.buttons_list:
-			button.deselect()
+			self.deselectButton(button)
 			if button.getPosX() + button.getRadiusX()/2 > box_x_min:
 				if button.getPosX() - button.getRadiusX()/2 < box_x_max:
 					if button.getPosY() + button.getRadiusY()/2 > box_y_min:
 						if button.getPosY() - button.getRadiusY()/2 < box_y_max:
-							if self.edit_mode:
-								button.editSelect()
-							else:
-								button.select()
-							self.selected_list.append(button)
+							self.selectButton(button)
 							for sel in button.getSelection():
 								select.append(sel)
 
@@ -250,9 +269,9 @@ class Editor(QtWidgets.QWidget):
 						valid_sel = False
 
 				if valid_sel:
-					button.select()
+					self.selectButton(button)
 				else:
-					button.deselect()
+					self.deselectButton(button)
 
 			self.repaint()
 
@@ -261,16 +280,28 @@ class Editor(QtWidgets.QWidget):
 		return self.edit_mode
 
 
+	def selectButton(self, button):
+		button.select()
+		if button not in self.selected_list:
+			self.selected_list.append(button)
+
+
+	def deselectButton(self, button):
+		button.deselect()
+		if button in self.selected_list:
+			self.selected_list.remove(button)
+
+
 class EditorButton():
 	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, text):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
 		self.radius_x = radius_x
 		self.radius_y = radius_y
+		self.edit_offset = (0, 0)
 		self.selection = selection
 		self.shape = shape
 		self.selected = False
-		self.edit_selected = False
 		self.color = QtGui.QColor(120, 120, 255)
 		self.selected_color = QtGui.QColor(220, 220, 255)
 
@@ -299,16 +330,20 @@ class EditorButton():
 		return self.radius_y
 
 
+	def setEditOffset(self, edit_offset):
+		self.edit_offset = edit_offset
+
+
+	def getEditOffset(self):
+		return self.edit_offset
+
+
 	def getSelection(self):
 		return self.selection
 
 
 	def getShape(self):
 		return self.shape
-
-
-	def getSelected(self):
-		return self.selected or self.edit_selected
 
 
 	def select(self):
@@ -319,24 +354,19 @@ class EditorButton():
 		self.selected = False
 
 
-	def editSelect(self):
-		self.edit_selected = True
+	def getSelected(self):
+		return self.selected
 
 
-	def editDeselect(self):
-		self.edit_selected = False
+	def draw(self, qp, edit_mode):
+		qp.setBrush(self.color)
+		qp.setPen(QtGui.QColor(10, 10, 10))
 
-
-	def draw(self, qp):
 		if self.selected:
 			qp.setBrush(self.selected_color)
-		else:
-			qp.setBrush(self.color)
-
-		if self.edit_selected:
-			qp.setPen(self.selected_color)
-		else:
-			qp.setPen(QtGui.QColor(10, 10, 10))
+			if edit_mode:
+				qp.setBrush(self.color)
+				qp.setPen(self.selected_color)
 
 		if self.shape == "ellipse":
 			qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
