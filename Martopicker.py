@@ -68,6 +68,7 @@ class Martopicker(QtWidgets.QDialog):
 	def connectInterface(self):
 		self.mode_button.clicked.connect(self.toggleEditModeCommand)
 		self.color_button.clicked.connect(self.chooseColorCommand)
+		self.size_slider.valueChanged.connect(self.sizeSliderCommand)
 		self.name_textfield.textEdited.connect(self.buttonNameChangedCommand)
 
 
@@ -80,7 +81,13 @@ class Martopicker(QtWidgets.QDialog):
 		# color = QtWidgets.QColorDialog.getColor(options=QtWidgets.QColorDialog.DontUseNativeDialog)
 		color = QtWidgets.QColorDialog.getColor()
 
-		print(color)
+		if color.isValid():
+			self.editor.setButtonColor(color)
+
+	def sizeSliderCommand(self):
+		size = self.size_slider.value() / 10
+
+		self.editor.setButtonSizeOffset(size)
 
 
 	def buttonNameChangedCommand(self):
@@ -183,6 +190,13 @@ class Editor(QtWidgets.QWidget):
 			if not self.edited_list:
 				if (self.box_selection[2] ** 2 + self.box_selection[3] ** 2) ** 0.5 > 2:
 					self.boxSelect()
+
+		if len(self.selected_list) == 1:
+			self.parent.name_textfield.setEnabled(True)
+			self.parent.name_textfield.setText(self.selected_list[0].getText())
+		else:
+			self.parent.name_textfield.setText("")
+			self.parent.name_textfield.setEnabled(False)
 
 
 	def mouseMoveEvent(self, e):
@@ -294,11 +308,6 @@ class Editor(QtWidgets.QWidget):
 		if not self.edit_mode:
 			cmds.select(select)
 
-		if len(self.selected_list) == 1:
-			self.parent.name_textfield.setEnabled(True)
-		else:
-			self.parent.name_textfield.setEnabled(False)
-
 		self.box_selection = [-1, -1, 0, 0]
 
 		self.repaint()
@@ -324,6 +333,18 @@ class Editor(QtWidgets.QWidget):
 
 	def getEditMode(self):
 		return self.edit_mode
+
+
+	def setButtonColor(self, color):
+		for button in self.selected_list:
+			button.setColor(color)
+		self.repaint()
+
+
+	def setButtonSizeOffset(self, size):
+		for button in self.selected_list:
+			button.setSize(size)
+		self.repaint()
 
 
 	def setButtonName(self, name):
@@ -362,15 +383,18 @@ class EditorButton():
 	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, text):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
+		self.default_radius_x = radius_x
 		self.radius_x = radius_x
+		self.default_radius_y = radius_y
 		self.radius_y = radius_y
+		self.size_offset = 0
 		self.edit_offset = (0, 0)
 		self.selection = selection
 		self.shape = shape
 		self.text = text
 		self.selected = False
 		self.color = QtGui.QColor(120, 120, 255)
-		self.selected_color = QtGui.QColor(220, 220, 255)
+		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 100, 0), min(self.color.value() + 100, 255))
 
 
 	def getPosX(self):
@@ -420,6 +444,32 @@ class EditorButton():
 	def setText(self, text):
 		self.text = text
 
+		if self.text:
+			qp = QtGui.QPainter()
+			font = qp.font()
+			fm = QtGui.QFontMetrics(font)
+			rect = fm.boundingRect(self.text)
+
+			self.radius_x = rect.width() + 5
+			self.radius_y = rect.height() + 2
+
+		else:
+			self.radius_x = self.default_radius_x
+			self.radius_y = self.default_radius_y
+
+
+	def getColor(self):
+		return self.color
+
+
+	def setColor(self, color):
+		self.color = color
+		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 120, 0), min(self.color.value() + 120, 255))
+
+
+	def setSize(self, size):
+		self.size_offset = size
+
 
 	def select(self):
 		self.selected = True
@@ -443,14 +493,20 @@ class EditorButton():
 				qp.setBrush(self.color)
 				qp.setPen(self.selected_color)
 
+		size_x = self.radius_x + self.size_offset
+		size_y = self.radius_y + self.size_offset
+
 		if self.shape == "ellipse":
 			if self.text:
-				qp.drawRoundedRect()
-				qp.drawText(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.text)
+				qp.drawRoundedRect(self.pos_x - size_x/2, self.pos_y - size_y/2, size_x, size_y, 5, 5)
+				qp.drawText(self.pos_x - size_x/2, self.pos_y - size_y/2, size_x, size_y, QtCore.Qt.AlignVCenter|QtCore.Qt.AlignHCenter, self.text)
 			else:
-				qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
+				qp.drawEllipse(self.pos_x - size_x/2, self.pos_y - size_y/2, size_x, size_y)
 		elif self.shape == "rect":
-			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
+			qp.drawRect(self.pos_x - size_x/2, self.pos_y - size_y/2, size_x, size_y)
+
+			if self.text:
+				qp.drawText(self.pos_x - size_x/2, self.pos_y - size_y/2, size_x, size_y, QtCore.Qt.AlignVCenter|QtCore.Qt.AlignHCenter, self.text)
 
 
 	def isOnButton(self, x, y):
@@ -460,6 +516,7 @@ class EditorButton():
 					if y < self.pos_y + self.radius_y/2:
 						return True
 		return False
+
 
 def getMayaWindow():
 	ptr = mui.MQtUtil.mainWindow()
