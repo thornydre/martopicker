@@ -51,7 +51,7 @@ class Martopicker(QtWidgets.QDialog):
 		self.edit_buttons_widget.setLayout(edit_buttons_layout)
 		self.edit_buttons_widget.setVisible(False)
 
-		self.editor = Editor(600, 400)
+		self.editor = Editor(self, 600, 400)
 
 		buttons_layout.addWidget(self.mode_button)
 		buttons_layout.addWidget(self.edit_buttons_widget)
@@ -68,6 +68,7 @@ class Martopicker(QtWidgets.QDialog):
 	def connectInterface(self):
 		self.mode_button.clicked.connect(self.toggleEditModeCommand)
 		self.color_button.clicked.connect(self.chooseColorCommand)
+		self.name_textfield.textEdited.connect(self.buttonNameChangedCommand)
 
 
 	def toggleEditModeCommand(self):
@@ -82,6 +83,12 @@ class Martopicker(QtWidgets.QDialog):
 		print(color)
 
 
+	def buttonNameChangedCommand(self):
+		name = self.name_textfield.text()
+
+		self.editor.setButtonName(name)
+
+
 	def closeEvent(self, e):
 		cmds.scriptJob(kill=self.maya_job)
 
@@ -91,12 +98,15 @@ class Martopicker(QtWidgets.QDialog):
 
 
 class Editor(QtWidgets.QWidget):
-	def __init__(self, width, height):
+	def __init__(self, parent, width, height):
+		self.parent = parent
 		self.buttons_list = []
 		self.selected_list = []
 		self.edit_mode = False
 		self.box_selection = [-1, -1, 0, 0]
 		self.edited_list = []
+
+		self.moving_buttons = False
 
 		super(Editor, self).__init__()
 
@@ -179,6 +189,7 @@ class Editor(QtWidgets.QWidget):
 		repaint = False
 
 		if self.edit_mode:
+			self.moving_buttons = True
 			for button in self.edited_list:
 				button.setPosX(e.x() + button.getEditOffset()[0])
 				button.setPosY(e.y() + button.getEditOffset()[1])
@@ -228,7 +239,7 @@ class Editor(QtWidgets.QWidget):
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
-		qp.setRenderHint(QPainter.Antialiasing, True)
+		qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
 		qp.begin(self)
 
 		for button in self.buttons_list:
@@ -245,13 +256,16 @@ class Editor(QtWidgets.QWidget):
 	def updateSelectMode(self, e):
 		select = []
 
-		for button in self.buttons_list:
-			dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
-			self.deselectButton(button)
-			if button.isOnButton(e.x(), e.y()):
-				self.selectButton(button)
-				for sel in button.getSelection():
-					select.append(sel)
+		if self.moving_buttons:
+			self.moving_buttons = False
+		else:
+			for button in self.buttons_list:
+				dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
+				self.deselectButton(button)
+				if button.isOnButton(e.x(), e.y()):
+					self.selectButton(button)
+					for sel in button.getSelection():
+						select.append(sel)
 
 		if not self.edit_mode:
 			cmds.select(select)
@@ -280,6 +294,11 @@ class Editor(QtWidgets.QWidget):
 		if not self.edit_mode:
 			cmds.select(select)
 
+		if len(self.selected_list) == 1:
+			self.parent.name_textfield.setEnabled(True)
+		else:
+			self.parent.name_textfield.setEnabled(False)
+
 		self.box_selection = [-1, -1, 0, 0]
 
 		self.repaint()
@@ -305,6 +324,11 @@ class Editor(QtWidgets.QWidget):
 
 	def getEditMode(self):
 		return self.edit_mode
+
+
+	def setButtonName(self, name):
+		self.selected_list[0].setText(name)
+		self.repaint()
 
 
 	def selectButton(self, button):
@@ -343,6 +367,7 @@ class EditorButton():
 		self.edit_offset = (0, 0)
 		self.selection = selection
 		self.shape = shape
+		self.text = text
 		self.selected = False
 		self.color = QtGui.QColor(120, 120, 255)
 		self.selected_color = QtGui.QColor(220, 220, 255)
@@ -388,6 +413,14 @@ class EditorButton():
 		return self.shape
 
 
+	def getText(self):
+		return self.text
+
+
+	def setText(self, text):
+		self.text = text
+
+
 	def select(self):
 		self.selected = True
 
@@ -411,7 +444,11 @@ class EditorButton():
 				qp.setPen(self.selected_color)
 
 		if self.shape == "ellipse":
-			qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
+			if self.text:
+				qp.drawRoundedRect()
+				qp.drawText(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.text)
+			else:
+				qp.drawEllipse(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
 		elif self.shape == "rect":
 			qp.drawRect(self.pos_x - self.radius_x/2, self.pos_y - self.radius_y/2, self.radius_x, self.radius_y)
 
