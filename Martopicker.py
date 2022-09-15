@@ -174,12 +174,14 @@ class Editor(QtWidgets.QWidget):
 						selection = cmds.ls(sl=True)
 						if selection:
 							if len(selection) == 1:
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", ""))
+								color = self.generateButtonColor(selection[0])
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color))
 							else:
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", ""))
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23)))
 								i = 1
 								for sel in selection:
-									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", ""))
+									color = self.generateButtonColor(sel)
+									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color))
 									i += 1
 
 							self.repaint()
@@ -379,8 +381,28 @@ class Editor(QtWidgets.QWidget):
 					self.repaint()
 
 
+	def generateButtonColor(self, selection):
+		name_based = False
+		position_based = True
+		color_based = False
+
+		if name_based:
+			if "_lf_" in selection:
+				return QtGui.QColor(255, 120, 120)
+			elif "_rt_" in selection:
+				return QtGui.QColor(120, 120, 255)
+
+		elif position_based:
+			if cmds.xform(selection, q=True, t=True, ws=True)[0] > 0:
+				return QtGui.QColor(255, 120, 120)
+			elif cmds.xform(selection, q=True, t=True, ws=True)[0] < 0:
+				return QtGui.QColor(120, 120, 255)
+
+		return QtGui.QColor(255, 249, 23)
+
+
 class EditorButton():
-	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, text):
+	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, color):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
 		self.default_radius_x = radius_x
@@ -391,9 +413,9 @@ class EditorButton():
 		self.edit_offset = (0, 0)
 		self.selection = selection
 		self.shape = shape
-		self.text = text
+		self.text = ""
 		self.selected = False
-		self.color = QtGui.QColor(120, 120, 255)
+		self.color = color
 		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 100, 0), min(self.color.value() + 100, 255))
 
 
