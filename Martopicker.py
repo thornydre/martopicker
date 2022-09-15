@@ -85,7 +85,7 @@ class Martopicker(QtWidgets.QDialog):
 			self.editor.setButtonColor(color)
 
 	def sizeSliderCommand(self):
-		size = self.size_slider.value() / 10
+		size = self.size_slider.value() / 5
 
 		self.editor.setButtonSizeOffset(size)
 
@@ -191,9 +191,13 @@ class Editor(QtWidgets.QWidget):
 				if (self.box_selection[2] ** 2 + self.box_selection[3] ** 2) ** 0.5 > 2:
 					self.boxSelect()
 
+		self.box_selection = [-1, -1, 0, 0]
+		self.repaint()
+
 		if len(self.selected_list) == 1:
 			self.parent.name_textfield.setEnabled(True)
 			self.parent.name_textfield.setText(self.selected_list[0].getText())
+			self.parent.size_slider.setValue(self.selected_list[0].getSize() * 5)
 		else:
 			self.parent.name_textfield.setText("")
 			self.parent.name_textfield.setEnabled(False)
@@ -307,10 +311,6 @@ class Editor(QtWidgets.QWidget):
 
 		if not self.edit_mode:
 			cmds.select(select)
-
-		self.box_selection = [-1, -1, 0, 0]
-
-		self.repaint()
 
 
 	def selectionFromViewport(self):
@@ -450,12 +450,12 @@ class EditorButton():
 			fm = QtGui.QFontMetrics(font)
 			rect = fm.boundingRect(self.text)
 
-			self.radius_x = rect.width() + 5
-			self.radius_y = rect.height() + 2
+			self.radius_x = rect.width() + 5 + self.size_offset
+			self.radius_y = rect.height() + 2 + self.size_offset
 
 		else:
-			self.radius_x = self.default_radius_x
-			self.radius_y = self.default_radius_y
+			self.radius_x = self.default_radius_x + self.size_offset
+			self.radius_y = self.default_radius_y + self.size_offset
 
 
 	def getColor(self):
@@ -467,8 +467,25 @@ class EditorButton():
 		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 120, 0), min(self.color.value() + 120, 255))
 
 
+	def getSize(self):
+		return self.size_offset
+
+
 	def setSize(self, size):
 		self.size_offset = size
+
+		if self.text:
+			qp = QtGui.QPainter()
+			font = qp.font()
+			fm = QtGui.QFontMetrics(font)
+			rect = fm.boundingRect(self.text)
+
+			self.radius_x = rect.width() + 5 + self.size_offset
+			self.radius_y = rect.height() + 2 + self.size_offset
+
+		else:
+			self.radius_x = self.default_radius_x + self.size_offset
+			self.radius_y = self.default_radius_y + self.size_offset
 
 
 	def select(self):
@@ -493,8 +510,8 @@ class EditorButton():
 				qp.setBrush(self.color)
 				qp.setPen(self.selected_color)
 
-		size_x = self.radius_x + self.size_offset
-		size_y = self.radius_y + self.size_offset
+		size_x = self.radius_x
+		size_y = self.radius_y
 
 		if self.shape == "ellipse":
 			if self.text:
