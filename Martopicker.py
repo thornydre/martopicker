@@ -96,8 +96,13 @@ class Martopicker(QtWidgets.QDialog):
 
 
 	def textEditorCommand(self):
-		ui = TextEditor(self)
-		ui.show()
+		text_editor = TextEditor(self)
+		text_editor.exec()
+
+		button_info = text_editor.getData()
+
+		if button_info["script"]:
+			self.editor.addEditorButton((50, 50), (20, 20), [], "rect", QtGui.QColor(255, 249, 23), "", button_info["script"])
 
 
 	def closeEvent(self, e):
@@ -179,13 +184,16 @@ class Editor(QtWidgets.QWidget):
 						if selection:
 							if len(selection) == 1:
 								color = self.generateButtonColor(selection[0])
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color, ""))
+								self.addEditorButton((e.x(), e.y()), (10, 10), selection, "ellipse", color, "", "")
+								# self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color, "", ""))
 							else:
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23), ""))
+								self.addEditorButton((e.x(), e.y()), (20, 10), selection, "rect", QtGui.QColor(255, 249, 23), "", "")
+								# self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23), "", ""))
 								i = 1
 								for sel in selection:
 									color = self.generateButtonColor(sel)
-									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color, ""))
+									self.addEditorButton((e.x(), e.y() + i * 20), (10, 10), [sel], "ellipse", color, "", "")
+									# self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color, "", ""))
 									i += 1
 
 							self.repaint()
@@ -284,7 +292,6 @@ class Editor(QtWidgets.QWidget):
 			self.moving_buttons = False
 		else:
 			for button in self.buttons_list:
-				dist = math.sqrt((e.x() - button.getPosX()) ** 2 + (e.y() - button.getPosY()) ** 2)
 				self.deselectButton(button)
 				if button.isOnButton(e.x(), e.y()):
 					self.selectButton(button)
@@ -325,14 +332,15 @@ class Editor(QtWidgets.QWidget):
 
 			for button in self.buttons_list:
 				valid_sel = True
-				for sel in button.getSelection():
-					if sel not in viewport_selection:
-						valid_sel = False
+				if button.getSelection():
+					for sel in button.getSelection():
+						if sel not in viewport_selection:
+							valid_sel = False
 
-				if valid_sel:
-					self.selectButton(button)
-				else:
-					self.deselectButton(button)
+					if valid_sel:
+						self.selectButton(button)
+					else:
+						self.deselectButton(button)
 
 			self.repaint()
 
@@ -359,9 +367,11 @@ class Editor(QtWidgets.QWidget):
 
 
 	def selectButton(self, button):
-		button.select()
-		if button not in self.selected_list:
-			self.selected_list.append(button)
+		selection_button = button.select()
+
+		if selection_button:
+			if button not in self.selected_list:
+				self.selected_list.append(button)
 
 
 	def deselectButton(self, button):
@@ -405,8 +415,12 @@ class Editor(QtWidgets.QWidget):
 		return QtGui.QColor(255, 249, 23)
 
 
+	def addEditorButton(self, pos, size, elem, shape, color, text, script):
+		self.buttons_list.append(EditorButton(pos[0], pos[1], size[0], size[1], elem, shape, color, text, script))
+
+
 class EditorButton():
-	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, color, script):
+	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, color, text, script):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
 		self.default_radius_x = radius_x
@@ -417,10 +431,12 @@ class EditorButton():
 		self.edit_offset = (0, 0)
 		self.selection = selection
 		self.shape = shape
-		self.text = ""
-		self.selected = False
 		self.color = color
 		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 100, 0), min(self.color.value() + 100, 255))
+		self.text = text
+		self.script = script
+
+		self.selected = False
 
 
 	def getPosX(self):
@@ -515,7 +531,12 @@ class EditorButton():
 
 
 	def select(self):
-		self.selected = True
+		if self.script:
+			exec(self.script)
+			return False
+		else:
+			self.selected = True
+			return True
 
 
 	def deselect(self):
@@ -565,6 +586,9 @@ class TextEditor(QtWidgets.QDialog):
 	def __init__(self, parent = None):
 		super(TextEditor, self).__init__(parent)
 
+		self.validate = True
+		self.script = ""
+
 		self.setInterface()
 		self.connectInterface()
 
@@ -595,11 +619,24 @@ class TextEditor(QtWidgets.QDialog):
 
 
 	def createButtonCommand(self):
-		print("Create button")
+		self.script = self.text_editor.toPlainText()
+
+		if self.script:
+			self.close()
 
 
 	def cancelCommand(self):
-		print("Cancel")
+		self.validate = False
+		self.close()
+
+
+	def getData(self):
+		if self.validate:
+			if self.script:
+				result = {}
+				result["script"] = self.script
+				return result
+		return None
 
 
 def getMayaWindow():
