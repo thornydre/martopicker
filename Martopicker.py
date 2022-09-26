@@ -14,8 +14,6 @@ class Martopicker(QtWidgets.QDialog):
 	def __init__(self, parent = None):
 		super(Martopicker, self).__init__(parent)
 
-		# self.installEventFilter(self)
-
 		self.setInterface()
 		self.connectInterface()
 		self.maya_job = cmds.scriptJob(event=["SelectionChanged", self.editor.selectionFromViewport])
@@ -70,6 +68,7 @@ class Martopicker(QtWidgets.QDialog):
 		self.color_button.clicked.connect(self.chooseColorCommand)
 		self.size_slider.valueChanged.connect(self.sizeSliderCommand)
 		self.name_textfield.textEdited.connect(self.buttonNameChangedCommand)
+		self.add_scripted_button.clicked.connect(self.textEditorCommand)
 
 
 	def toggleEditModeCommand(self):
@@ -94,6 +93,11 @@ class Martopicker(QtWidgets.QDialog):
 		name = self.name_textfield.text()
 
 		self.editor.setButtonName(name)
+
+
+	def textEditorCommand(self):
+		ui = TextEditor(self)
+		ui.show()
 
 
 	def closeEvent(self, e):
@@ -175,13 +179,13 @@ class Editor(QtWidgets.QWidget):
 						if selection:
 							if len(selection) == 1:
 								color = self.generateButtonColor(selection[0])
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color))
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color, ""))
 							else:
-								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23)))
+								self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23), ""))
 								i = 1
 								for sel in selection:
 									color = self.generateButtonColor(sel)
-									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color))
+									self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color, ""))
 									i += 1
 
 							self.repaint()
@@ -402,7 +406,7 @@ class Editor(QtWidgets.QWidget):
 
 
 class EditorButton():
-	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, color):
+	def __init__(self, pos_x, pos_y, radius_x, radius_y, selection, shape, color, script):
 		self.pos_x = pos_x
 		self.pos_y = pos_y
 		self.default_radius_x = radius_x
@@ -555,6 +559,47 @@ class EditorButton():
 					if y < self.pos_y + self.radius_y/2:
 						return True
 		return False
+
+
+class TextEditor(QtWidgets.QDialog):
+	def __init__(self, parent = None):
+		super(TextEditor, self).__init__(parent)
+
+		self.setInterface()
+		self.connectInterface()
+
+
+	def setInterface(self):
+		main_layout = QtWidgets.QVBoxLayout()
+
+		self.text_editor = QtWidgets.QPlainTextEdit()
+
+		buttons_layout = QtWidgets.QHBoxLayout()
+		buttons_layout.setContentsMargins(0, 0, 0, 0)
+
+		self.submit_button = QtWidgets.QPushButton("Create Button")
+		self.cancel_button = QtWidgets.QPushButton("Cancel")
+
+		buttons_layout.addWidget(self.submit_button)
+		buttons_layout.addWidget(self.cancel_button)
+
+		main_layout.addWidget(self.text_editor)
+		main_layout.addLayout(buttons_layout)
+
+		self.setLayout(main_layout)
+
+
+	def connectInterface(self):
+		self.submit_button.clicked.connect(self.createButtonCommand)
+		self.cancel_button.clicked.connect(self.cancelCommand)
+
+
+	def createButtonCommand(self):
+		print("Create button")
+
+
+	def cancelCommand(self):
+		print("Cancel")
 
 
 def getMayaWindow():
