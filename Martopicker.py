@@ -101,8 +101,9 @@ class Martopicker(QtWidgets.QDialog):
 
 		button_info = text_editor.getData()
 
-		if button_info["script"]:
+		if button_info:
 			self.editor.addEditorButton((50, 50), (20, 20), [], "rect", QtGui.QColor(255, 249, 23), "", button_info["script"])
+			self.editor.repaint()
 
 
 	def closeEvent(self, e):
@@ -121,6 +122,7 @@ class Editor(QtWidgets.QWidget):
 		self.edit_mode = False
 		self.box_selection = [-1, -1, 0, 0]
 		self.edited_list = []
+		self.bg_image = ""
 
 		self.moving_buttons = False
 
@@ -185,15 +187,12 @@ class Editor(QtWidgets.QWidget):
 							if len(selection) == 1:
 								color = self.generateButtonColor(selection[0])
 								self.addEditorButton((e.x(), e.y()), (10, 10), selection, "ellipse", color, "", "")
-								# self.buttons_list.append(EditorButton(e.x(), e.y(), 10, 10, selection, "ellipse", color, "", ""))
 							else:
 								self.addEditorButton((e.x(), e.y()), (20, 10), selection, "rect", QtGui.QColor(255, 249, 23), "", "")
-								# self.buttons_list.append(EditorButton(e.x(), e.y(), 20, 10, selection, "rect", QtGui.QColor(255, 249, 23), "", ""))
 								i = 1
 								for sel in selection:
 									color = self.generateButtonColor(sel)
 									self.addEditorButton((e.x(), e.y() + i * 20), (10, 10), [sel], "ellipse", color, "", "")
-									# self.buttons_list.append(EditorButton(e.x(), e.y() + i * 20, 10, 10, [sel], "ellipse", color, "", ""))
 									i += 1
 
 							self.repaint()
@@ -271,8 +270,13 @@ class Editor(QtWidgets.QWidget):
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
-		qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
 		qp.begin(self)
+		qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+		if self.bg_image:
+			pixmap = QtGui.QPixmap(self.bg_image)
+			qp.drawPixmap(self.rect(), pixmap)
+
 
 		for button in self.buttons_list:
 			button.draw(qp, self.edit_mode)
@@ -367,9 +371,10 @@ class Editor(QtWidgets.QWidget):
 
 
 	def selectButton(self, button):
-		selection_button = button.select()
-
-		if selection_button:
+		if not self.edit_mode and button.getScript():
+			button.executeScript()
+		else:
+			button.select()
 			if button not in self.selected_list:
 				self.selected_list.append(button)
 
@@ -383,15 +388,18 @@ class Editor(QtWidgets.QWidget):
 	def savePicker(self, path):
 		if path:
 			if os.path.splitext(path)[1] == ".pik":
+				data = {"buttons": self.buttons_list, "background": self.bg_image}
 				with open(path, "wb") as file:
-					pickle.dump(self.buttons_list, file)
+					pickle.dump(data, file)
 
 
 	def loadPicker(self, path):
 		if path:
 			if os.path.splitext(path)[1] == ".pik":
 				with open(path, "rb") as file:
-					self.buttons_list = pickle.load(file)
+					data = pickle.load(file)
+					self.buttons_list = data["buttons"]
+					self.bg_image = data["background"]
 					self.repaint()
 
 
@@ -479,6 +487,15 @@ class EditorButton():
 		return self.shape
 
 
+	def getColor(self):
+		return self.color
+
+
+	def setColor(self, color):
+		self.color = color
+		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 120, 0), min(self.color.value() + 120, 255))
+
+
 	def getText(self):
 		return self.text
 
@@ -500,13 +517,8 @@ class EditorButton():
 			self.radius_y = self.default_radius_y + self.size_offset
 
 
-	def getColor(self):
-		return self.color
-
-
-	def setColor(self, color):
-		self.color = color
-		self.selected_color = QtGui.QColor.fromHsv(self.color.hue(), max(self.color.saturation() - 120, 0), min(self.color.value() + 120, 255))
+	def getScript(self):
+		return self.script
 
 
 	def getSize(self):
@@ -531,16 +543,15 @@ class EditorButton():
 
 
 	def select(self):
-		if self.script:
-			exec(self.script)
-			return False
-		else:
-			self.selected = True
-			return True
+		self.selected = True
 
 
 	def deselect(self):
 		self.selected = False
+
+
+	def executeScript(self):
+		exec(self.script)
 
 
 	def getSelected(self):
