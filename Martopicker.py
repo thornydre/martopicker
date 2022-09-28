@@ -41,11 +41,13 @@ class Martopicker(QtWidgets.QDialog):
 		self.size_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
 		self.name_textfield = QtWidgets.QLineEdit()
 		self.add_scripted_button = QtWidgets.QPushButton("Add Scripted Button")
+		self.bg_image_button = QtWidgets.QPushButton("Change Background")
 
 		edit_buttons_layout.addWidget(self.color_button)
 		edit_buttons_layout.addWidget(self.size_slider)
 		edit_buttons_layout.addWidget(self.name_textfield)
 		edit_buttons_layout.addWidget(self.add_scripted_button)
+		edit_buttons_layout.addWidget(self.bg_image_button)
 		self.edit_buttons_widget.setLayout(edit_buttons_layout)
 		self.edit_buttons_widget.setVisible(False)
 
@@ -69,6 +71,7 @@ class Martopicker(QtWidgets.QDialog):
 		self.size_slider.valueChanged.connect(self.sizeSliderCommand)
 		self.name_textfield.textEdited.connect(self.buttonNameChangedCommand)
 		self.add_scripted_button.clicked.connect(self.textEditorCommand)
+		self.bg_image_button.clicked.connect(self.changeBackgroundCommand)
 
 
 	def toggleEditModeCommand(self):
@@ -106,6 +109,12 @@ class Martopicker(QtWidgets.QDialog):
 			self.editor.repaint()
 
 
+	def changeBackgroundCommand(self):
+		image_path = QtWidgets.QFileDialog.getOpenFileName(caption="Load background image", filter="Images (*.png *.xpm *.jpg)")[0]
+
+		self.editor.setBackgroundImage(image_path)
+
+
 	def closeEvent(self, e):
 		cmds.scriptJob(kill=self.maya_job)
 
@@ -122,7 +131,6 @@ class Editor(QtWidgets.QWidget):
 		self.edit_mode = False
 		self.box_selection = [-1, -1, 0, 0]
 		self.edited_list = []
-		self.bg_image = ""
 
 		self.moving_buttons = False
 
@@ -135,7 +143,9 @@ class Editor(QtWidgets.QWidget):
 		p.setColor(self.backgroundRole(), QtGui.QColor(50, 50, 50))
 		self.setPalette(p)
 		self.setMinimumSize(width, height)
-		self.resize(width, height) 
+		self.resize(width, height)
+
+		self.bg_image = ""
 
 
 	def mousePressEvent(self, e):
@@ -274,9 +284,7 @@ class Editor(QtWidgets.QWidget):
 		qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
 
 		if self.bg_image:
-			pixmap = QtGui.QPixmap(self.bg_image)
-			qp.drawPixmap(self.rect(), pixmap)
-
+			qp.drawPixmap(self.bg_scaled_pixmap.rect(), self.bg_scaled_pixmap)
 
 		for button in self.buttons_list:
 			button.draw(qp, self.edit_mode)
@@ -300,7 +308,8 @@ class Editor(QtWidgets.QWidget):
 				if button.isOnButton(e.x(), e.y()):
 					self.selectButton(button)
 					for sel in button.getSelection():
-						select.append(sel)
+						if cmds.objExists(sel):
+							select.append(sel)
 
 		if not self.edit_mode:
 			cmds.select(select)
@@ -324,7 +333,8 @@ class Editor(QtWidgets.QWidget):
 						if button.getPosY() - button.getRadiusY()/2 < box_y_max:
 							self.selectButton(button)
 							for sel in button.getSelection():
-								select.append(sel)
+								if cmds.objExists(sel):
+									select.append(sel)
 
 		if not self.edit_mode:
 			cmds.select(select)
@@ -385,6 +395,14 @@ class Editor(QtWidgets.QWidget):
 			self.selected_list.remove(button)
 
 
+	def setBackgroundImage(self, image_path):
+		self.bg_image = image_path
+		bg_pixmap = QtGui.QPixmap(self.bg_image)
+		self.bg_scaled_pixmap = bg_pixmap.scaledToWidth(600)
+		self.setMinimumSize(self.bg_scaled_pixmap.width(), self.bg_scaled_pixmap.height())
+		self.resize(self.bg_scaled_pixmap.width(), self.bg_scaled_pixmap.height())
+
+
 	def savePicker(self, path):
 		if path:
 			if os.path.splitext(path)[1] == ".pik":
@@ -399,7 +417,7 @@ class Editor(QtWidgets.QWidget):
 				with open(path, "rb") as file:
 					data = pickle.load(file)
 					self.buttons_list = data["buttons"]
-					self.bg_image = data["background"]
+					self.setBackgroundImage(data["background"])
 					self.repaint()
 
 
@@ -410,15 +428,15 @@ class Editor(QtWidgets.QWidget):
 
 		if name_based:
 			if "_lf_" in selection:
-				return QtGui.QColor(255, 120, 120)
-			elif "_rt_" in selection:
 				return QtGui.QColor(120, 120, 255)
+			elif "_rt_" in selection:
+				return QtGui.QColor(255, 120, 120)
 
 		elif position_based:
 			if cmds.xform(selection, q=True, t=True, ws=True)[0] > 0:
-				return QtGui.QColor(255, 120, 120)
-			elif cmds.xform(selection, q=True, t=True, ws=True)[0] < 0:
 				return QtGui.QColor(120, 120, 255)
+			elif cmds.xform(selection, q=True, t=True, ws=True)[0] < 0:
+				return QtGui.QColor(255, 120, 120)
 
 		return QtGui.QColor(255, 249, 23)
 
