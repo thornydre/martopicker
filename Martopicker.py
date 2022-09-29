@@ -258,6 +258,9 @@ class Editor(QtWidgets.QWidget):
 					self.buttons_list.remove(button)
 				self.selected_list = []
 
+			self.parent.name_textfield.setText("")
+			self.parent.name_textfield.setEnabled(False)
+
 			self.repaint()
 
 		elif e.key() == QtCore.Qt.Key_S:
