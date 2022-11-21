@@ -11,7 +11,7 @@ from functools import partial
 # import Editor
 
 class Martopicker(QtWidgets.QDialog):
-	def __init__(self, parent = None):
+	def __init__(self, parent=None):
 		super(Martopicker, self).__init__(parent)
 
 		self.setInterface()
@@ -80,8 +80,12 @@ class Martopicker(QtWidgets.QDialog):
 
 
 	def chooseColorCommand(self):
-		# color = QtWidgets.QColorDialog.getColor(options=QtWidgets.QColorDialog.DontUseNativeDialog)
-		color = QtWidgets.QColorDialog.getColor()
+		test = ColorPickerWindow(self)
+		test.exec()
+		# color_dialog = QtWidgets.QColorDialog()
+		# color_dialog.setOption(QtWidgets.QColorDialog.DontUseNativeDialog, False)
+		# color_dialog.setOption(QtWidgets.QColorDialog.NoButtons, True)
+		# color = color_dialog.getColor()
 
 		if color.isValid():
 			self.editor.setButtonColor(color)
@@ -615,7 +619,7 @@ class EditorButton():
 
 
 class TextEditor(QtWidgets.QDialog):
-	def __init__(self, parent = None):
+	def __init__(self, parent=None):
 		super(TextEditor, self).__init__(parent)
 
 		self.validate = True
@@ -669,6 +673,102 @@ class TextEditor(QtWidgets.QDialog):
 				result["script"] = self.script
 				return result
 		return None
+
+
+class ColorPickerWindow(QtWidgets.QDialog):
+	def __init__(self, parent):
+		super(ColorPickerWindow, self).__init__(parent)
+		
+		self.initUI()
+
+		self.resize(300, 300)
+
+
+	def initUI(self):
+		main_layout = QtWidgets.QVBoxLayout()
+		main_widget = ColorPicker()
+		main_layout.addWidget(main_widget)
+
+		self.setLayout(main_layout)
+
+
+class ColorPicker(QtWidgets.QWidget):
+	def __init__(self, parent=None):
+		super(ColorPicker, self).__init__(parent)
+
+		self.radius = 100
+		self.value = 1.0
+		self.pressed = False
+		self.cursor_pos = [0, 0]
+		self.cursor_radius = 6
+
+		self.qp = QtGui.QPainter()
+
+
+	def paintEvent(self, e):
+		dist = ((self.radius - self.cursor_pos[0]) ** 2 + (self.radius - self.cursor_pos[1]) ** 2) ** 0.5
+		if dist > self.radius:
+			ratio = self.radius / dist
+			x = self.cursor_pos[0] - self.radius
+			y = self.cursor_pos[1] - self.radius
+			self.cursor_pos[0] = self.radius + x * ratio
+			self.cursor_pos[1] = self.radius + y * ratio
+
+		self.qp.begin(self)
+		self.qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+		center = QtCore.QPointF(self.radius, self.radius)
+		self.hsv_grad = QtGui.QConicalGradient(center, self.radius)
+		for deg in range(360):
+			col = QtGui.QColor.fromHsvF(deg / 360, 1, self.value)
+			self.hsv_grad.setColorAt(deg / 360, col)
+
+		self.val_grad = QtGui.QRadialGradient(center, self.radius)
+		self.val_grad.setColorAt(0.0, QtGui.QColor.fromHsvF(0.0, 0.0, self.value, 1.0))
+		self.val_grad.setColorAt(1.0, QtCore.Qt.transparent)
+
+		self.qp.setPen(QtCore.Qt.transparent)
+		self.qp.setBrush(self.hsv_grad)
+		self.qp.drawEllipse(0, 0, self.radius * 2, self.radius * 2)
+		self.qp.setBrush(self.val_grad)
+		self.qp.drawEllipse(0, 0, self.radius * 2, self.radius * 2)
+
+		self.qp.setPen(QtGui.QColor(0, 0, 0))
+		self.qp.setBrush(QtCore.Qt.transparent)
+		self.qp.drawEllipse(self.cursor_pos[0] - self.cursor_radius/2, self.cursor_pos[1] - self.cursor_radius/2, self.cursor_radius, self.cursor_radius)
+
+		self.qp.end()
+
+
+	def mousePressEvent(self, e):
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			self.setFocus()
+
+			self.pressed = True
+
+			self.repaint()
+
+
+	def mouseMoveEvent(self, e):
+		if self.pressed:
+			self.cursor_pos = [e.x(), e.y()]
+
+			self.repaint()
+
+
+	def mouseReleaseEvent(self, e):
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			self.pressed = False
+
+			self.repaint()
+
+
+	def getColorAtCursor(self):
+		dist = ((self.radius - self.cursor_pos[0]) ** 2 + (self.radius - self.cursor_pos[1]) ** 2) ** 0.5
+		sat = dist / self.radius
+
+		return QtGui.QColor.fromHsv(0.5, sat, 1.0)
+
 
 
 def getMayaWindow():
