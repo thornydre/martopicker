@@ -51,7 +51,7 @@ class Martopicker(QtWidgets.QDialog):
 		self.edit_buttons_widget.setLayout(edit_buttons_layout)
 		self.edit_buttons_widget.setVisible(False)
 
-		self.editor = Editor(self, 600, 400)
+		self.editor = Editor(600, 400, self)
 
 		buttons_layout.addWidget(self.mode_button)
 		buttons_layout.addWidget(self.edit_buttons_widget)
@@ -80,15 +80,21 @@ class Martopicker(QtWidgets.QDialog):
 
 
 	def chooseColorCommand(self):
-		test = ColorPickerWindow(self)
-		test.exec()
-		# color_dialog = QtWidgets.QColorDialog()
-		# color_dialog.setOption(QtWidgets.QColorDialog.DontUseNativeDialog, False)
-		# color_dialog.setOption(QtWidgets.QColorDialog.NoButtons, True)
-		# color = color_dialog.getColor()
+		color = QtGui.QColor(128, 128, 128)
+
+		selected_list = self.editor.getSelectedList()
+
+		if selected_list:
+			color = selected_list[-1].getColor()
+
+		color_dialog = ColorPickerWindow(color, self)
+		color_dialog.exec()
+
+		color = color_dialog.getColor()
 
 		if color.isValid():
 			self.editor.setButtonColor(color)
+
 
 	def sizeSliderCommand(self):
 		size = self.size_slider.value() / 5
@@ -128,7 +134,7 @@ class Martopicker(QtWidgets.QDialog):
 
 
 class Editor(QtWidgets.QWidget):
-	def __init__(self, parent, width, height):
+	def __init__(self, width, height, parent=None):
 		self.parent = parent
 		self.buttons_list = []
 		self.selected_list = []
@@ -369,6 +375,9 @@ class Editor(QtWidgets.QWidget):
 	def getEditMode(self):
 		return self.edit_mode
 
+
+	def getSelectedList(self):
+		return self.selected_list
 
 	def setButtonColor(self, color):
 		for button in self.selected_list:
@@ -676,8 +685,10 @@ class TextEditor(QtWidgets.QDialog):
 
 
 class ColorPickerWindow(QtWidgets.QDialog):
-	def __init__(self, parent):
+	def __init__(self, color, parent=None):
 		super(ColorPickerWindow, self).__init__(parent)
+
+		self.color = color
 		
 		self.initUI()
 
@@ -685,35 +696,62 @@ class ColorPickerWindow(QtWidgets.QDialog):
 
 
 	def initUI(self):
-		main_layout = QtWidgets.QVBoxLayout()
-		main_widget = ColorPicker()
-		main_layout.addWidget(main_widget)
+		vertical_layout = QtWidgets.QVBoxLayout()
+		horizontal_layout = QtWidgets.QHBoxLayout()
+		self.color_wheel_widget = ColorWheel(parent=self, radius=100, color=self.color)
+		self.color_value_widget = ColorValue(parent=self, width=16, height=200, color=self.color)
+		self.color_display_widget = ColorDisplay(color=self.color)
 
-		self.setLayout(main_layout)
+		self.color_wheel_widget.color_changed_signal.connect(self.colorChangedCommand)
+		self.color_value_widget.value_changed_signal.connect(self.valueChangedCommand)
+
+		horizontal_layout.addWidget(self.color_wheel_widget)
+		horizontal_layout.addWidget(self.color_value_widget)
+		vertical_layout.addLayout(horizontal_layout)
+		vertical_layout.addWidget(self.color_display_widget)
+
+		self.setLayout(vertical_layout)
 
 
-class ColorPicker(QtWidgets.QWidget):
-	def __init__(self, parent=None):
-		super(ColorPicker, self).__init__(parent)
+	def getColor(self):
+		return self.color_wheel_widget.getColor()
 
-		self.radius = 100
-		self.value = 1.0
+
+	@QtCore.Slot()
+	def valueChangedCommand(self):
+		self.color_wheel_widget.setValue(self.color_value_widget.getValue())
+		self.colorChangedCommand()
+
+
+	@QtCore.Slot()
+	def colorChangedCommand(self):
+		self.color_display_widget.setColor(self.color_wheel_widget.getColor())
+
+
+class ColorWheel(QtWidgets.QWidget):
+	color_changed_signal = QtCore.Signal()
+
+	def __init__(self, radius, color, parent=None):
+		super(ColorWheel, self).__init__(parent)
+
+		self.parent = parent
+
+		self.radius = radius
+		self.hue = color.hueF()
+		self.saturation = color.saturationF()
+		self.value = color.valueF()
 		self.pressed = False
 		self.cursor_pos = [0, 0]
+		self.positionCursor()
 		self.cursor_radius = 6
+
+		self.setMinimumWidth(self.radius * 2)
+		self.setMinimumHeight(self.radius * 2)
 
 		self.qp = QtGui.QPainter()
 
 
 	def paintEvent(self, e):
-		dist = ((self.radius - self.cursor_pos[0]) ** 2 + (self.radius - self.cursor_pos[1]) ** 2) ** 0.5
-		if dist > self.radius:
-			ratio = self.radius / dist
-			x = self.cursor_pos[0] - self.radius
-			y = self.cursor_pos[1] - self.radius
-			self.cursor_pos[0] = self.radius + x * ratio
-			self.cursor_pos[1] = self.radius + y * ratio
-
 		self.qp.begin(self)
 		self.qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
 
@@ -744,6 +782,8 @@ class ColorPicker(QtWidgets.QWidget):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			self.setFocus()
 
+			self.updateCursorPos(e.x(), e.y())
+
 			self.pressed = True
 
 			self.repaint()
@@ -751,7 +791,7 @@ class ColorPicker(QtWidgets.QWidget):
 
 	def mouseMoveEvent(self, e):
 		if self.pressed:
-			self.cursor_pos = [e.x(), e.y()]
+			self.updateCursorPos(e.x(), e.y())
 
 			self.repaint()
 
@@ -763,12 +803,177 @@ class ColorPicker(QtWidgets.QWidget):
 			self.repaint()
 
 
-	def getColorAtCursor(self):
+	def updateCursorPos(self, new_x, new_y):
+		self.cursor_pos = [new_x, new_y]
+
 		dist = ((self.radius - self.cursor_pos[0]) ** 2 + (self.radius - self.cursor_pos[1]) ** 2) ** 0.5
-		sat = dist / self.radius
+		x = self.cursor_pos[0] - self.radius
+		y = self.cursor_pos[1] - self.radius
+		if dist > self.radius:
+			ratio = self.radius / dist
+			self.cursor_pos[0] = self.radius + x * ratio
+			self.cursor_pos[1] = self.radius + y * ratio
 
-		return QtGui.QColor.fromHsv(0.5, sat, 1.0)
+		mod = math.sqrt(x * x + y * y) * math.sqrt(1)
+		angle = y / mod
+		
+		if x < 0:
+			self.hue = (angle + 1) / 4
+		else:
+			self.hue = (1 - (angle + 1) / 2) / 2 + 0.5
 
+		self.saturation = min(dist / self.radius, 1.0)
+
+		self.color_changed_signal.emit()
+
+
+	def setHue(self, hue):
+		self.hue = hue
+		self.repaint()
+
+
+	def setSaturation(self, saturation):
+		self.saturation = saturation
+		self.repaint()
+
+
+	def setValue(self, value):
+		self.value = value
+		self.repaint()
+
+
+	def getColor(self):
+		return QtGui.QColor.fromHsvF(self.hue, self.saturation, self.value)
+
+
+	def positionCursor(self):
+		x_coord = math.cos(self.hue * math.pi * 2) * self.radius * self.saturation
+		y_coord = math.sin(self.hue * math.pi * 2) * self.radius * self.saturation
+
+		self.cursor_pos[0] = self.radius + x_coord
+		self.cursor_pos[1] = self.radius + y_coord
+
+
+class ColorValue(QtWidgets.QWidget):
+	value_changed_signal = QtCore.Signal()
+
+	def __init__(self, height, width, color, parent=None):
+		super(ColorValue, self).__init__(parent)
+
+		self.parent = parent
+
+		self.height = height
+		self.width = width
+		self.value = color.valueF()
+		self.pressed = False
+		self.cursor_pos = [self.width / 2, 0]
+		self.positionCursor()
+		self.cursor_radius = 6
+
+		self.setMinimumWidth(self.width)
+		self.setMinimumHeight(self.height)
+
+		self.qp = QtGui.QPainter()
+
+
+	def paintEvent(self, e):
+		self.qp.begin(self)
+		self.qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+		self.val_grad = QtGui.QLinearGradient(0.0, 0.0, 0.0, self.height)
+		self.val_grad.setColorAt(1.0, QtGui.QColor(0, 0, 0))
+		self.val_grad.setColorAt(0.0, QtGui.QColor(255, 255, 255))
+
+		self.qp.setPen(QtCore.Qt.transparent)
+		self.qp.setBrush(self.val_grad)
+		slider_rect = QtCore.QRectF(0, 0, self.width, self.height)
+		self.qp.drawRoundedRect(slider_rect, 5, 5)
+
+		self.qp.setPen(QtGui.QColor(0, 0, 0))
+		self.qp.setBrush(QtCore.Qt.transparent)
+		self.qp.drawEllipse(self.cursor_pos[0] - self.cursor_radius/2, self.cursor_pos[1] - self.cursor_radius/2, self.cursor_radius, self.cursor_radius)
+
+		self.qp.end()
+
+
+	def mousePressEvent(self, e):
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			self.setFocus()
+
+			self.updateCursorPos(e.x(), e.y())
+
+			self.pressed = True
+
+			self.repaint()
+
+
+	def mouseMoveEvent(self, e):
+		if self.pressed:
+			self.updateCursorPos(e.x(), e.y())
+
+			self.repaint()
+
+
+	def mouseReleaseEvent(self, e):
+		if e.button() == QtCore.Qt.MouseButton.LeftButton:
+			self.pressed = False
+
+			self.repaint()
+
+
+	def updateCursorPos(self, new_x, new_y):
+		self.cursor_pos = [self.width / 2, new_y]
+
+		self.cursor_pos[1] = max(0, self.cursor_pos[1])
+		self.cursor_pos[1] = min(self.height, self.cursor_pos[1])
+
+		self.value = 1 - self.cursor_pos[1] / self.height
+
+		self.value_changed_signal.emit()
+
+
+	def setValue(self, value):
+		self.value = value
+
+
+	def getValue(self):
+		return self.value
+
+
+	def positionCursor(self):
+		self.cursor_pos[1] = self.height * self.value
+
+
+class ColorDisplay(QtWidgets.QWidget):
+	def __init__(self, color, parent=None):
+		super(ColorDisplay, self).__init__(parent)
+
+		self.color = color
+
+		self.height = 20
+		self.width = 100
+
+		self.setMinimumWidth(self.width)
+		self.setMinimumHeight(self.height)
+
+		self.qp = QtGui.QPainter()
+
+
+	def paintEvent(self, e):
+		self.qp.begin(self)
+		self.qp.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+		self.qp.setPen(QtCore.Qt.transparent)
+		self.qp.setBrush(self.color)
+		display_rect = QtCore.QRectF(0, 0, self.width, self.height)
+		self.qp.drawRoundedRect(display_rect, 5, 5)
+
+		self.qp.end()
+
+
+	def setColor(self, color):
+		self.color = color
+		self.repaint()
 
 
 def getMayaWindow():
