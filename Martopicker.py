@@ -88,12 +88,13 @@ class Martopicker(QtWidgets.QDialog):
 			color = selected_list[-1].getColor()
 
 		color_dialog = ColorPickerWindow(color, self)
+		color_dialog.move(self.pos().x() - color_dialog.width() * 2.5, self.pos().y())
 		color_dialog.exec()
 
-		color = color_dialog.getColor()
+		color_info = color_dialog.getData()
 
-		if color.isValid():
-			self.editor.setButtonColor(color)
+		if color_info:
+			self.editor.setButtonColor(color_info["color"])
 
 
 	def sizeSliderCommand(self):
@@ -689,28 +690,44 @@ class ColorPickerWindow(QtWidgets.QDialog):
 		super(ColorPickerWindow, self).__init__(parent)
 
 		self.color = color
+		self.validate = True
 		
-		self.initUI()
+		self.setInterface()
+		self.connectInterface()
 
-		self.resize(300, 300)
 
-
-	def initUI(self):
+	def setInterface(self):
 		vertical_layout = QtWidgets.QVBoxLayout()
 		horizontal_layout = QtWidgets.QHBoxLayout()
+
 		self.color_wheel_widget = ColorWheel(parent=self, radius=100, color=self.color)
 		self.color_value_widget = ColorValue(parent=self, width=16, height=200, color=self.color)
 		self.color_display_widget = ColorDisplay(color=self.color)
-
-		self.color_wheel_widget.color_changed_signal.connect(self.colorChangedCommand)
-		self.color_value_widget.value_changed_signal.connect(self.valueChangedCommand)
-
+		
 		horizontal_layout.addWidget(self.color_wheel_widget)
 		horizontal_layout.addWidget(self.color_value_widget)
+
+		buttons_layout = QtWidgets.QHBoxLayout()
+		buttons_layout.setContentsMargins(0, 0, 0, 0)
+
+		self.submit_button = QtWidgets.QPushButton("OK")
+		self.cancel_button = QtWidgets.QPushButton("Cancel")
+
+		buttons_layout.addWidget(self.submit_button)
+		buttons_layout.addWidget(self.cancel_button)
+
 		vertical_layout.addLayout(horizontal_layout)
 		vertical_layout.addWidget(self.color_display_widget)
+		vertical_layout.addLayout(buttons_layout)
 
 		self.setLayout(vertical_layout)
+
+
+	def connectInterface(self):
+		self.color_wheel_widget.color_changed_signal.connect(self.colorChangedCommand)
+		self.color_value_widget.value_changed_signal.connect(self.valueChangedCommand)
+		self.submit_button.clicked.connect(self.submitCommand)
+		self.cancel_button.clicked.connect(self.cancelCommand)
 
 
 	def getColor(self):
@@ -726,6 +743,23 @@ class ColorPickerWindow(QtWidgets.QDialog):
 	@QtCore.Slot()
 	def colorChangedCommand(self):
 		self.color_display_widget.setColor(self.color_wheel_widget.getColor())
+
+
+	def submitCommand(self):
+		self.close()
+
+
+	def cancelCommand(self):
+		self.validate = False
+		self.close()
+
+
+	def getData(self):
+		if self.validate:
+			result = {}
+			result["color"] = self.color_wheel_widget.getColor()
+			return result
+		return None
 
 
 class ColorWheel(QtWidgets.QWidget):
@@ -772,7 +806,7 @@ class ColorWheel(QtWidgets.QWidget):
 		self.qp.drawEllipse(0, 0, self.radius * 2, self.radius * 2)
 
 		self.qp.setPen(QtGui.QColor(0, 0, 0))
-		self.qp.setBrush(QtCore.Qt.transparent)
+		self.qp.setBrush(QtGui.QColor(255, 255, 255))
 		self.qp.drawEllipse(self.cursor_pos[0] - self.cursor_radius/2, self.cursor_pos[1] - self.cursor_radius/2, self.cursor_radius, self.cursor_radius)
 
 		self.qp.end()
@@ -815,12 +849,12 @@ class ColorWheel(QtWidgets.QWidget):
 			self.cursor_pos[1] = self.radius + y * ratio
 
 		mod = math.sqrt(x * x + y * y) * math.sqrt(1)
-		angle = y / mod
+		angle = math.acos(y / mod) / math.pi
 		
 		if x < 0:
-			self.hue = (angle + 1) / 4
+			self.hue = (1 - angle) / 2
 		else:
-			self.hue = (1 - (angle + 1) / 2) / 2 + 0.5
+			self.hue = angle / 2 + 0.5
 
 		self.saturation = min(dist / self.radius, 1.0)
 
@@ -847,8 +881,8 @@ class ColorWheel(QtWidgets.QWidget):
 
 
 	def positionCursor(self):
-		x_coord = math.cos(self.hue * math.pi * 2) * self.radius * self.saturation
-		y_coord = math.sin(self.hue * math.pi * 2) * self.radius * self.saturation
+		x_coord = math.sin(self.hue * math.pi * 2) * self.radius * self.saturation * -1
+		y_coord = math.cos(self.hue * math.pi * 2) * self.radius * self.saturation * -1
 
 		self.cursor_pos[0] = self.radius + x_coord
 		self.cursor_pos[1] = self.radius + y_coord
@@ -890,7 +924,7 @@ class ColorValue(QtWidgets.QWidget):
 		self.qp.drawRoundedRect(slider_rect, 5, 5)
 
 		self.qp.setPen(QtGui.QColor(0, 0, 0))
-		self.qp.setBrush(QtCore.Qt.transparent)
+		self.qp.setBrush(QtGui.QColor(255, 255, 255))
 		self.qp.drawEllipse(self.cursor_pos[0] - self.cursor_radius/2, self.cursor_pos[1] - self.cursor_radius/2, self.cursor_radius, self.cursor_radius)
 
 		self.qp.end()
@@ -941,7 +975,7 @@ class ColorValue(QtWidgets.QWidget):
 
 
 	def positionCursor(self):
-		self.cursor_pos[1] = self.height * self.value
+		self.cursor_pos[1] = self.height * (1 - self.value)
 
 
 class ColorDisplay(QtWidgets.QWidget):
@@ -950,11 +984,11 @@ class ColorDisplay(QtWidgets.QWidget):
 
 		self.color = color
 
-		self.height = 20
-		self.width = 100
+		# self.height = 20
+		# self.width = 100
 
-		self.setMinimumWidth(self.width)
-		self.setMinimumHeight(self.height)
+		# self.setMinimumWidth(self.width)
+		self.setMinimumHeight(20)
 
 		self.qp = QtGui.QPainter()
 
@@ -965,7 +999,7 @@ class ColorDisplay(QtWidgets.QWidget):
 
 		self.qp.setPen(QtCore.Qt.transparent)
 		self.qp.setBrush(self.color)
-		display_rect = QtCore.QRectF(0, 0, self.width, self.height)
+		display_rect = QtCore.QRectF(0, 0, self.width(), self.height())
 		self.qp.drawRoundedRect(display_rect, 5, 5)
 
 		self.qp.end()
