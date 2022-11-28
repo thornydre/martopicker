@@ -21,7 +21,7 @@ class Martopicker(QtWidgets.QDialog):
 
 	def setInterface(self):
 		main_layout = QtWidgets.QVBoxLayout()
-		
+
 		buttons_widget = QtWidgets.QWidget()
 		buttons_widget.setMinimumHeight(30)
 		buttons_widget.setMaximumHeight(30)
@@ -162,6 +162,7 @@ class Editor(QtWidgets.QWidget):
 	def mousePressEvent(self, e):
 		if e.button() == QtCore.Qt.MouseButton.LeftButton:
 			self.setFocus()
+			not_selected = True
 
 			start_box = True
 			if self.edit_mode:
@@ -174,22 +175,24 @@ class Editor(QtWidgets.QWidget):
 							if button.getSelected():
 								reset_selection = False
 
-				for button in self.buttons_list:
+				for button in reversed(self.buttons_list):
 					button.setEditOffset((button.getPosX() - e.x(), button.getPosY() - e.y()))
 
-					if reset_selection:
-						self.deselectButton(button)
-					else:
-						if button.getSelected():
-							self.edited_list.append(button)
+					if not_selected:
+						if reset_selection:
+							self.deselectButton(button)
+						else:
+							if button.getSelected():
+								self.edited_list.append(button)
 
-					if button.isOnButton(e.x(), e.y()):
-						self.selectButton(button)
-						start_box = False
+						if button.isOnButton(e.x(), e.y()):
+							self.selectButton(button)
+							start_box = False
 
 						if reset_selection:
 							if button.getSelected():
 								self.edited_list.append(button)
+								not_selected = False
 
 			if start_box:
 				self.box_selection[0] = e.x()
@@ -273,6 +276,26 @@ class Editor(QtWidgets.QWidget):
 			self.parent.name_textfield.setEnabled(False)
 
 			self.repaint()
+
+		elif e.key() == QtCore.Qt.Key_Left:
+			if self.edit_mode:
+				self.verticalAlignMin()
+
+		elif e.key() == QtCore.Qt.Key_Right:
+			if self.edit_mode:
+				self.verticalAlignMax()
+
+		elif e.key() == QtCore.Qt.Key_Up:
+			if self.edit_mode:
+				self.horizontalAlignMin()
+
+		elif e.key() == QtCore.Qt.Key_Down:
+			if self.edit_mode:
+				self.horizontalAlignMax()
+
+		elif e.key() == QtCore.Qt.Key_A:
+			if self.edit_mode:
+				self.align()
 
 		elif e.key() == QtCore.Qt.Key_S:
 			if e.modifiers() == QtCore.Qt.ControlModifier:
@@ -460,6 +483,73 @@ class Editor(QtWidgets.QWidget):
 
 	def addEditorButton(self, pos, size, elem, shape, color, text, script):
 		self.buttons_list.append(EditorButton(pos[0], pos[1], size[0], size[1], elem, shape, color, text, script))
+
+
+	def verticalAlignMin(self):
+		min_button = self.selected_list[0]
+
+		for button in self.selected_list:
+			if button.getPosX() < min_button.getPosX():
+				min_button = button
+
+		for button in self.selected_list:
+			button.setPosX(min_button.getPosX())
+
+		self.repaint()
+
+
+	def verticalAlignMax(self):
+		min_button = self.selected_list[0]
+
+		for button in self.selected_list:
+			if button.getPosX() > min_button.getPosX():
+				min_button = button
+
+		for button in self.selected_list:
+			button.setPosX(min_button.getPosX())
+
+		self.repaint()
+
+
+	def horizontalAlignMin(self):
+		min_button = self.selected_list[0]
+
+		for button in self.selected_list:
+			if button.getPosY() < min_button.getPosY():
+				min_button = button
+
+		for button in self.selected_list:
+			button.setPosY(min_button.getPosY())
+
+		self.repaint()
+
+
+	def horizontalAlignMax(self):
+		min_button = self.selected_list[0]
+
+		for button in self.selected_list:
+			if button.getPosY() > min_button.getPosY():
+				min_button = button
+
+		for button in self.selected_list:
+			button.setPosY(min_button.getPosY())
+
+		self.repaint()
+
+
+	def align(self):
+		start_button = self.selected_list[-1]
+		end_button = self.selected_list[-2]
+
+		vec = [end_button.getPosX() - start_button.getPosX(), end_button.getPosY() - start_button.getPosY()]
+
+		intervals = len(self.selected_list) - 1
+
+		inter_vec = [vec[0] / intervals, vec[1] / intervals]
+
+		for i, button in enumerate(self.selected_list[:-2]):
+			buton.setPosX(start_button.getPosX() + inter_vec * (i + 1))
+			buton.setPosY(start_button.getPosY() + inter_vec * (i + 1))
 
 
 class EditorButton():
