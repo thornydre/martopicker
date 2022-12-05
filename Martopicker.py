@@ -548,8 +548,10 @@ class Editor(QtWidgets.QWidget):
 		inter_vec = [vec[0] / intervals, vec[1] / intervals]
 
 		for i, button in enumerate(self.selected_list[:-2]):
-			buton.setPosX(start_button.getPosX() + inter_vec * (i + 1))
-			buton.setPosY(start_button.getPosY() + inter_vec * (i + 1))
+			button.setPosX(start_button.getPosX() + inter_vec[0] * (i + 1))
+			button.setPosY(start_button.getPosY() + inter_vec[1] * (i + 1))
+
+		self.repaint()
 
 
 class EditorButton():
