@@ -126,7 +126,7 @@ class Martopicker(QtWidgets.QDialog):
 		self.editor.setBackgroundImage(image_path)
 
 
-	def closeEvent(self, e):
+	def dockCloseEventTriggered(self, e):
 		cmds.scriptJob(kill=self.maya_job)
 
 
