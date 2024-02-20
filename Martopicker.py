@@ -1,4 +1,5 @@
 from PySide2 import QtCore, QtGui, QtWidgets, QtUiTools
+from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 import maya.OpenMayaUI as mui
 import shiboken2
 import sys
@@ -10,7 +11,7 @@ from functools import partial
 # sys.path.append(os.path.dirname(__file__))
 # import Editor
 
-class Martopicker(QtWidgets.QDialog):
+class Martopicker(MayaQWidgetDockableMixin, QtWidgets.QDialog):
 	def __init__(self, parent=None):
 		super(Martopicker, self).__init__(parent)
 
@@ -1110,7 +1111,7 @@ def getMayaWindow():
 def main():
 	global ui
 	ui = Martopicker(getMayaWindow())
-	ui.show()
+	ui.show(dockable=True)
 
 
 if __name__ == "__main__":
